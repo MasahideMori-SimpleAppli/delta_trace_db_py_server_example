@@ -1,8 +1,9 @@
-# delta-trace-db
+# delta-trace-db example.
 
 This is a sample server implementation using the Python version of DeltaTraceDB.
 
 ## Usage
+
 ### Installing dependencies
 pip install -r requirements.txt
 
