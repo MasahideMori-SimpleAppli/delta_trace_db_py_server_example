@@ -1,6 +1,9 @@
 # app.py
 from delta_trace_db.db.delta_trace_db_core import DeltaTraceDatabase
 from delta_trace_db.query.enum_query_type import EnumQueryType
+from delta_trace_db.query.query import Query
+from delta_trace_db.query.transaction_query import TransactionQuery
+from delta_trace_db.query.util_query import UtilQuery
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -29,30 +32,54 @@ app.add_middleware(
 # ---------------------------
 delta_trace_db = DeltaTraceDatabase()
 
+
 # ---------------------------
 # エンドポイント
 # ---------------------------
 @app.post("/backend")
 async def backend_db(request: Request):
-    # TODO まずJWTの検証を行う
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    token = auth_header.split(" ")[1]
-    print("token:", token)
+    # TODO まずJWTの検証を行い、正しいユーザーかどうか確認します。
 
-    # 検証が問題なければ、クエリのJSONを取り出す。
-    query = await request.json()
+    # 検証が問題なければ、クエリのJSONを取り出します。
+    # ここでは、便利に使用するためにクエリクラスを一旦復元します。
+    query_json = await request.json()
+    query = UtilQuery.convert_from_json(query_json)
     # TODO 操作中のユーザーの権限に応じて、実行できるクエリは制限してください。
     # TODO ここでは、通常はサーバーでユーザー側から使用しないものを制限しています。
-    result = delta_trace_db.execute_query_object(query=query, prohibit=[EnumQueryType.clear, EnumQueryType.clearAdd,
-                                                                       EnumQueryType.conformToTemplate,
-                                                                       EnumQueryType.renameField])
+    prohibit = [EnumQueryType.clear, EnumQueryType.clearAdd,
+                EnumQueryType.conformToTemplate,
+                EnumQueryType.renameField]
+    result = delta_trace_db.execute_query_object(query=query, prohibit=prohibit)
+    # TODO テスト用。内容確認のためだけにprintしています。本番は削除してください。
+    print(str(delta_trace_db.to_dict()))
     # 成功した場合のみ、クエリをログとして保存します。
     if result.is_success:
-        # TODO 暗号化などが必要な場合は調整してください。
-        _save_log(query=query)
+        # TODO 暗号化などが必要な場合はsave_json_file関数内を調整してください。
+        _save_log(query=query_json)
+    else:
+        # 禁止された呼び出しを行うなどした場合など、
+        # 失敗ケースはそのままresultを200 OKで返してもいい(フロントエンドでチェックする場合、isSuccessがfalseになる)ですが、
+        # 個別に処理して以下のようにエラーで返すこともできます。
+        if isinstance(query, Query):
+            if query.type in prohibit:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Operation not permitted."
+                )
+        elif isinstance(query,TransactionQuery):
+            for q in query.queries:
+                if q.type in prohibit:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Operation not permitted."
+                    )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Processing failed."
+            )
     return result.to_dict()
+
 
 # ---------------------------
 # 自動バックアップやログ保存など
@@ -60,6 +87,7 @@ async def backend_db(request: Request):
 def _save_log(query):
     # クエリログ（無制限に保存）
     return save_json_file(query, folder="logs", prefix="log", max_files=None, exp=".q")
+
 
 def _backup_db():
     # 定期バックアップ（最新7件（一週間分）のみ、拡張子 .dtdb）
@@ -101,7 +129,9 @@ def save_json_file(data: dict, folder: str, prefix: str = "log", max_files: int 
                     os.remove(os.path.join(folder, old_file))
                 except Exception as e:
                     print(f"Old backup delete failed.: {old_file}, {e}")
+    print("file saved: " + str(filepath))
     return filepath
+
 
 # ---------------------------
 # スケジューラ起動
@@ -119,9 +149,10 @@ if __name__ == "__main__":
         "app:app",  # "ファイル名:FastAPIインスタンス名"
         host="127.0.0.1",
         port=8000,
-        reload=False,  # TODO 本番環境ではリロードしてはならないのでFalse。多重起動する可能性がある。
+        reload=False,  # TODO 本番環境ではリロードしてはならないのでFalseにします。Trueだと多重起動する可能性があります。
         workers=1,  # シングルプロセス
         loop="asyncio",  # asyncioイベントループを使う
+        # TODO SSLの設定は別のプロジェクト等を参照してください。この例では扱いません。
         ssl_certfile="localhost.crt",  # SSL証明書
         ssl_keyfile="localhost.key"  # SSL秘密鍵
     )

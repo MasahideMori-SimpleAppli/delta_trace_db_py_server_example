@@ -1,7 +1,5 @@
 # delta-trace-db
 
-* This is currently a test implementation and is being fine-tuned.
-
 This is a sample server implementation using the Python version of DeltaTraceDB.
 
 ## Usage

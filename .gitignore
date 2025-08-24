@@ -208,3 +208,7 @@ __marimo__/
 
 # Other
 .idea/
+*.crt
+*.key
+logs/
+backups/
