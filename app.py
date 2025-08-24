@@ -20,12 +20,14 @@ from apscheduler.schedulers.background import BackgroundScheduler
 scheduler = BackgroundScheduler()
 @asynccontextmanager
 async def lifespan_context(fastapi_app: FastAPI):
+    # Startup 処理
     if not scheduler.running:
         scheduler.add_job(_backup_db, 'cron', hour=1, minute=0, id="daily_backup")
         # TODO テスト時はこちらを有効にすると10秒毎の保存ができます。
         # scheduler.add_job(_backup_db, 'interval', seconds=10, id="test_backup", replace_existing=True)
         scheduler.start()
     yield
+    # Shutdown 処理
     scheduler.shutdown()
 
 # ---------------------------
@@ -154,7 +156,7 @@ def save_json_file(data: dict, folder: str, prefix: str = "log", max_files: int 
     return filepath
 
 # ---------------------------
-# サーバー起動（SSL付き、python app.pyで直接起動可能）
+# サーバー起動（SSL付き、python3 app.pyで直接起動可能）
 # ---------------------------
 if __name__ == "__main__":
     uvicorn.run(
