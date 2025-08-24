@@ -11,12 +11,28 @@ import json
 import os
 from datetime import datetime
 import uuid
+from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
+
+# ---------------------------
+# スケジューラの作成
+# ---------------------------
+scheduler = BackgroundScheduler()
+@asynccontextmanager
+async def lifespan_context(fastapi_app: FastAPI):
+    if not scheduler.running:
+        scheduler.add_job(_backup_db, 'cron', hour=1, minute=0, id="daily_backup")
+        # TODO テスト時はこちらを有効にすると10秒毎の保存ができます。
+        # scheduler.add_job(_backup_db, 'interval', seconds=10, id="test_backup", replace_existing=True)
+        scheduler.start()
+    yield
+    scheduler.shutdown()
 
 # ---------------------------
 # FastAPIアプリ作成
 # ---------------------------
-app = FastAPI()
+app = FastAPI(lifespan=lifespan_context)
+
 
 # CORS設定
 app.add_middleware(
@@ -60,6 +76,8 @@ async def backend_db(request: Request):
         # 禁止された呼び出しを行うなどした場合など、
         # 失敗ケースはそのままresultを200 OKで返してもいい(フロントエンドでチェックする場合、isSuccessがfalseになる)ですが、
         # 個別に処理して以下のようにエラーで返すこともできます。
+        # エラーになったクエリも調査のために保存しておきます。
+        _save_error_query(query=query_json)
         if isinstance(query, Query):
             if query.type in prohibit:
                 raise HTTPException(
@@ -88,6 +106,9 @@ def _save_log(query):
     # クエリログ（無制限に保存）
     return save_json_file(query, folder="logs", prefix="log", max_files=None, exp=".q")
 
+def _save_error_query(query):
+    # エラーになったクエリログ（無制限に保存）
+    return save_json_file(query, folder="e_query", prefix="log", max_files=None, exp=".q")
 
 def _backup_db():
     # 定期バックアップ（最新7件（一週間分）のみ、拡張子 .dtdb）
@@ -131,15 +152,6 @@ def save_json_file(data: dict, folder: str, prefix: str = "log", max_files: int 
                     print(f"Old backup delete failed.: {old_file}, {e}")
     print("file saved: " + str(filepath))
     return filepath
-
-
-# ---------------------------
-# スケジューラ起動
-# ---------------------------
-scheduler = BackgroundScheduler()
-# 毎日 1:00 に実行（うるう秒や日付変更まわりの影響を完全に避ける）
-scheduler.add_job(_backup_db, 'cron', hour=1, minute=0)
-scheduler.start()
 
 # ---------------------------
 # サーバー起動（SSL付き、python app.pyで直接起動可能）
