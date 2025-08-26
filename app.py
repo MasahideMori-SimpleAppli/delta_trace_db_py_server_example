@@ -1,5 +1,6 @@
 # app.py
 from delta_trace_db.db.delta_trace_db_core import DeltaTraceDatabase
+from delta_trace_db.query.cause.permission import Permission
 from delta_trace_db.query.enum_query_type import EnumQueryType
 from delta_trace_db.query.query import Query
 from delta_trace_db.query.transaction_query import TransactionQuery
@@ -63,11 +64,11 @@ async def backend_db(request: Request):
     query_json = await request.json()
     query = UtilQuery.convert_from_json(query_json)
     # TODO 操作中のユーザーの権限に応じて、実行できるクエリは制限してください。
-    # TODO ここでは、通常はサーバーでユーザー側から使用しないものを制限しています。
-    prohibit = [EnumQueryType.clear, EnumQueryType.clearAdd,
-                EnumQueryType.conformToTemplate,
-                EnumQueryType.renameField]
-    result = delta_trace_db.execute_query_object(query=query, prohibit=prohibit)
+    # TODO 許可するもののみを書く方式で、collection_permissions=None（デフォルト）はフロントエンド専用で全て許可となるので注意してください。
+    # TODO キーはコレクション名です。パーミッションを指定しているコレクションへのアクセスのみが許可され、それ以外は拒否されます。
+    # TODO 例えば以下のパーミッションでは、usersへはaddやgetAllでアクセスできますが、clear等は使えず、users2などのコレクションにもアクセスできません。
+    collection_permissions = {"users" : Permission([EnumQueryType.add, EnumQueryType.getAll])}
+    result = delta_trace_db.execute_query_object(query=query, collection_permissions=collection_permissions)
     # TODO テスト用。内容確認のためだけにprintしています。本番は削除してください。
     print(str(delta_trace_db.to_dict()))
     # 成功した場合のみ、クエリをログとして保存します。
@@ -81,14 +82,14 @@ async def backend_db(request: Request):
         # エラーになったクエリも調査のために保存しておきます。
         _save_error_query(query=query_json)
         if isinstance(query, Query):
-            if query.type in prohibit:
+            if not UtilQuery.check_permissions(query, collection_permissions=collection_permissions):
                 raise HTTPException(
                     status_code=403,
                     detail="Operation not permitted."
                 )
         elif isinstance(query,TransactionQuery):
             for q in query.queries:
-                if q.type in prohibit:
+                if not UtilQuery.check_permissions(q, collection_permissions=collection_permissions):
                     raise HTTPException(
                         status_code=403,
                         detail="Operation not permitted."
