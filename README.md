@@ -2,6 +2,9 @@
 
 This is a sample server implementation using the Python version of DeltaTraceDB.
 
+* A sample with comments in English is app.py.
+* 日本語のコメント入りのサンプルはapp_ja.pyです。
+
 ## Usage
 
 ### Installing dependencies
@@ -9,6 +12,7 @@ pip install -r requirements.txt
 
 ### Run code
 python3 app.py
+(Depending on your OS, "python app.py")
 
 ## Support
 

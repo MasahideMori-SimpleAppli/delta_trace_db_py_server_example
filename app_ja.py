@@ -15,72 +15,70 @@ from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
 
 # ---------------------------
-# Create scheduler
+# スケジューラの作成
 # ---------------------------
 scheduler = BackgroundScheduler()
-
-
 @asynccontextmanager
 async def lifespan_context(fastapi_app: FastAPI):
-    # Startup processing
+    # Startup 処理
     if not scheduler.running:
         scheduler.add_job(_backup_db, 'cron', hour=1, minute=0, id="daily_backup")
-        # TODO During testing, enabling this allows saving every 10 seconds.
+        # TODO テスト時はこちらを有効にすると10秒毎の保存ができます。
         # scheduler.add_job(_backup_db, 'interval', seconds=10, id="test_backup", replace_existing=True)
         scheduler.start()
     yield
-    # Shutdown processing
+    # Shutdown 処理
     scheduler.shutdown()
 
-
 # ---------------------------
-# Create FastAPI app
+# FastAPIアプリ作成
 # ---------------------------
 app = FastAPI(lifespan=lifespan_context)
 
-# CORS settings
+
+# CORS設定
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins (for development)
+    allow_origins=["*"],  # すべてのオリジンを許可（開発用）
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # ---------------------------
-# In-memory DB (global variable)
+# インメモリDB（グローバル変数）
 # ---------------------------
 delta_trace_db = DeltaTraceDatabase()
 
 
 # ---------------------------
-# Endpoints
+# エンドポイント
 # ---------------------------
 @app.post("/backend")
 async def backend_db(request: Request):
-    # TODO First, verify the JWT to check if the user is valid.
+    # TODO まずJWTの検証を行い、正しいユーザーかどうか確認します。
 
-    # If verification is fine, extract the query JSON.
-    # Here, we temporarily restore it to the query class for convenience.
+    # 検証が問題なければ、クエリのJSONを取り出します。
+    # ここでは、便利に使用するためにクエリクラスを一旦復元します。
     query_json = await request.json()
     query = UtilQuery.convert_from_json(query_json)
-    # TODO Restrict executable queries according to the permissions of the operating user.
-    # TODO Note that if you only write allowed ones, collection_permissions=None (default) allows all for frontend only.
-    # TODO The key is the collection name. Only access to collections with specified permissions is allowed; others are denied.
-    # TODO For example, with the following permissions, access to "users" with add or getAll is allowed, but clear cannot be used, and access to collections like "users2" is denied.
-    collection_permissions = {"users": Permission([EnumQueryType.add, EnumQueryType.getAll])}
+    # TODO 操作中のユーザーの権限に応じて、実行できるクエリは制限してください。
+    # TODO 許可するもののみを書く方式で、collection_permissions=None（デフォルト）はフロントエンド専用で全て許可となるので注意してください。
+    # TODO キーはコレクション名です。パーミッションを指定しているコレクションへのアクセスのみが許可され、それ以外は拒否されます。
+    # TODO 例えば以下のパーミッションでは、usersへはaddやgetAllでアクセスできますが、clear等は使えず、users2などのコレクションにもアクセスできません。
+    collection_permissions = {"users" : Permission([EnumQueryType.add, EnumQueryType.getAll])}
     result = delta_trace_db.execute_query_object(query=query, collection_permissions=collection_permissions)
-    # TODO For testing. Print only to check the content. Remove in production.
+    # TODO テスト用。内容確認のためだけにprintしています。本番は削除してください。
     print(str(delta_trace_db.to_dict()))
-    # Only if successful, save the query as a log.
+    # 成功した場合のみ、クエリをログとして保存します。
     if result.is_success:
-        # TODO If encryption is needed, adjust inside save_json_file function.
+        # TODO 暗号化などが必要な場合はsave_json_file関数内を調整してください。
         _save_log(query=query_json)
     else:
-        # For cases such as forbidden calls,
-        # Failed cases can be returned as result with 200 OK (frontend sees isSuccess=false),
-        # or handled individually and returned as error as below.
-        # Save error queries for investigation.
+        # 禁止された呼び出しを行うなどした場合など、
+        # 失敗ケースはそのままresultを200 OKで返してもいい(フロントエンドでチェックする場合、isSuccessがfalseになる)ですが、
+        # 個別に処理して以下のようにエラーで返すこともできます。
+        # エラーになったクエリも調査のために保存しておきます。
         _save_error_query(query=query_json)
         if isinstance(query, Query):
             if not UtilQuery.check_permissions(query, collection_permissions=collection_permissions):
@@ -88,7 +86,7 @@ async def backend_db(request: Request):
                     status_code=403,
                     detail="Operation not permitted."
                 )
-        elif isinstance(query, TransactionQuery):
+        elif isinstance(query,TransactionQuery):
             for q in query.queries:
                 if not UtilQuery.check_permissions(q, collection_permissions=collection_permissions):
                     raise HTTPException(
@@ -104,36 +102,34 @@ async def backend_db(request: Request):
 
 
 # ---------------------------
-# Auto backup, log saving, etc.
+# 自動バックアップやログ保存など
 # ---------------------------
 def _save_log(query):
-    # Query log (Save without limit. Please limit storage depending on the OS type and log frequency.)
+    # クエリログ（無制限に保存。OSの種類やログの頻度によっては制限を加えてください）
     return save_json_file(query, folder="logs", prefix="log", max_files=None, exp=".q")
 
-
 def _save_error_query(query):
-    # Error query log (Save without limit. Please limit storage depending on the OS type and log frequency.)
+    # エラーになったクエリログ（無制限に保存。OSの種類やログの頻度によっては制限を加えてください）
     return save_json_file(query, folder="e_query", prefix="log", max_files=None, exp=".q")
 
-
 def _backup_db():
-    # Scheduled backup (keep only latest 7 files, one week, extension .dtdb)
+    # 定期バックアップ（最新7件（一週間分）のみ、拡張子 .dtdb）
     save_json_file(delta_trace_db.to_dict(), folder="backups", prefix="backup", max_files=7, exp=".dtdb")
 
 
 def save_json_file(data: dict, folder: str, prefix: str = "log", max_files: int = None, exp: str = ".q"):
     """
-    Save JSON data to the specified folder, keeping only max_files old files.
-    If max_files=None, do not delete (unlimited).
+    JSONデータを指定フォルダに保存し、古いファイルは max_files 件だけ残して削除
+    max_files=None の場合は削除なし（無制限）
 
     Args:
-        data: dictionary data to save
-        folder: destination folder
-        prefix: filename prefix
-        max_files: maximum number of files to keep (None means no deletion)
-        exp: file extension. Use ".q" for logs, ".dtdb" for DB.
+        data: 保存する辞書データ
+        folder: 保存先フォルダ
+        prefix: ファイル名の接頭辞
+        max_files: 残す最大ファイル数（Noneなら削除なし）
+        exp: ファイルの拡張子。ログなら「.q」、dbは「.dtdb」を指定する。
     Returns:
-        Path of the saved file
+        保存したファイルのパス
     """
     os.makedirs(folder, exist_ok=True)
     now = datetime.now()
@@ -142,11 +138,11 @@ def save_json_file(data: dict, folder: str, prefix: str = "log", max_files: int 
     filename = f"{prefix}_{timestamp}_{unique_id}" + exp
     filepath = os.path.join(folder, filename)
     with open(filepath, "w", encoding="utf-8") as f:
-        # Save Japanese correctly.
+        # 日本語を有効なまま保存。
         json_str = json.dumps(data, ensure_ascii=False, indent=2)
-        # TODO If encryption is needed, encrypt json_str here.
+        # TODO 暗号化が必要な場合、ここのjson_strを暗号化してください。
         f.write(json_str)
-    # Delete old files if max_files specified
+    # max_files が指定されていれば古いファイルを削除
     if max_files is not None and max_files > 0:
         files = [f for f in os.listdir(folder) if f.startswith(prefix) and f.endswith(exp)]
         files.sort()
@@ -159,19 +155,18 @@ def save_json_file(data: dict, folder: str, prefix: str = "log", max_files: int 
     print("file saved: " + str(filepath))
     return filepath
 
-
 # ---------------------------
-# Server startup (with SSL, can run directly with python3 app.py)
+# サーバー起動（SSL付き、python3 app_ja.pyで直接起動可能）
 # ---------------------------
 if __name__ == "__main__":
     uvicorn.run(
-        "app:app",  # "filename:FastAPI instance name"
+        "app:app",  # "ファイル名:FastAPIインスタンス名"
         host="127.0.0.1",
         port=8000,
-        reload=False,  # TODO In production, reload must be False. True may cause multiple instances.
-        workers=1,  # Single process
-        loop="asyncio",  # Use asyncio event loop
-        # TODO Refer to another project for SSL configuration. Not handled here.
-        ssl_certfile="localhost.crt",  # SSL certificate
-        ssl_keyfile="localhost.key"  # SSL private key
+        reload=False,  # TODO 本番環境ではリロードしてはならないのでFalseにします。Trueだと多重起動する可能性があります。
+        workers=1,  # シングルプロセス
+        loop="asyncio",  # asyncioイベントループを使う
+        # TODO SSLの設定は別のプロジェクト等を参照してください。この例では扱いません。
+        ssl_certfile="localhost.crt",  # SSL証明書
+        ssl_keyfile="localhost.key"  # SSL秘密鍵
     )
