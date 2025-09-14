@@ -136,6 +136,7 @@ def save_json_file(data: dict, folder: str, prefix: str = "log", max_files: int 
         Path of the saved file
     """
     os.makedirs(folder, exist_ok=True)
+    # TODO Change the timezone if necessary.
     now = datetime.now()
     timestamp = now.strftime("%Y%m%dT%H%M%S%f")[:-3]
     unique_id = uuid.uuid4().hex[:8]

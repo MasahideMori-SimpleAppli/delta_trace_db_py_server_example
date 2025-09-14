@@ -132,6 +132,7 @@ def save_json_file(data: dict, folder: str, prefix: str = "log", max_files: int 
         保存したファイルのパス
     """
     os.makedirs(folder, exist_ok=True)
+    # TODO 必要に応じてタイムゾーンは変更してください。
     now = datetime.now()
     timestamp = now.strftime("%Y%m%dT%H%M%S%f")[:-3]
     unique_id = uuid.uuid4().hex[:8]
