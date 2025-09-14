@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -137,7 +137,7 @@ def save_json_file(data: dict, folder: str, prefix: str = "log", max_files: int 
     """
     os.makedirs(folder, exist_ok=True)
     # TODO Change the timezone if necessary.
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     timestamp = now.strftime("%Y%m%dT%H%M%S%f")[:-3]
     unique_id = uuid.uuid4().hex[:8]
     filename = f"{prefix}_{timestamp}_{unique_id}" + exp

@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -18,6 +18,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 # スケジューラの作成
 # ---------------------------
 scheduler = BackgroundScheduler()
+
+
 @asynccontextmanager
 async def lifespan_context(fastapi_app: FastAPI):
     # Startup 処理
@@ -30,11 +32,11 @@ async def lifespan_context(fastapi_app: FastAPI):
     # Shutdown 処理
     scheduler.shutdown()
 
+
 # ---------------------------
 # FastAPIアプリ作成
 # ---------------------------
 app = FastAPI(lifespan=lifespan_context)
-
 
 # CORS設定
 app.add_middleware(
@@ -66,7 +68,7 @@ async def backend_db(request: Request):
     # TODO 許可するもののみを書く方式で、collection_permissions=None（デフォルト）はフロントエンド専用で全て許可となるので注意してください。
     # TODO キーはコレクション名です。パーミッションを指定しているコレクションへのアクセスのみが許可され、それ以外は拒否されます。
     # TODO 例えば以下のパーミッションでは、usersへはaddやgetAllでアクセスできますが、clear等は使えず、users2などのコレクションにもアクセスできません。
-    collection_permissions = {"users" : Permission([EnumQueryType.add, EnumQueryType.getAll])}
+    collection_permissions = {"users": Permission([EnumQueryType.add, EnumQueryType.getAll])}
     result = delta_trace_db.execute_query_object(query=query, collection_permissions=collection_permissions)
     # TODO テスト用。内容確認のためだけにprintしています。本番は削除してください。
     print(str(delta_trace_db.to_dict()))
@@ -86,7 +88,7 @@ async def backend_db(request: Request):
                     status_code=403,
                     detail="Operation not permitted."
                 )
-        elif isinstance(query,TransactionQuery):
+        elif isinstance(query, TransactionQuery):
             for q in query.queries:
                 if not UtilQuery.check_permissions(q, collection_permissions=collection_permissions):
                     raise HTTPException(
@@ -108,9 +110,11 @@ def _save_log(query):
     # クエリログ（無制限に保存。OSの種類やログの頻度によっては制限を加えてください）
     return save_json_file(query, folder="logs", prefix="log", max_files=None, exp=".q")
 
+
 def _save_error_query(query):
     # エラーになったクエリログ（無制限に保存。OSの種類やログの頻度によっては制限を加えてください）
     return save_json_file(query, folder="e_query", prefix="log", max_files=None, exp=".q")
+
 
 def _backup_db():
     # 定期バックアップ（最新7件（一週間分）のみ、拡張子 .dtdb）
@@ -133,7 +137,7 @@ def save_json_file(data: dict, folder: str, prefix: str = "log", max_files: int 
     """
     os.makedirs(folder, exist_ok=True)
     # TODO 必要に応じてタイムゾーンは変更してください。
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     timestamp = now.strftime("%Y%m%dT%H%M%S%f")[:-3]
     unique_id = uuid.uuid4().hex[:8]
     filename = f"{prefix}_{timestamp}_{unique_id}" + exp
@@ -155,6 +159,7 @@ def save_json_file(data: dict, folder: str, prefix: str = "log", max_files: int 
                     print(f"Old backup delete failed.: {old_file}, {e}")
     print("file saved: " + str(filepath))
     return filepath
+
 
 # ---------------------------
 # サーバー起動（SSL付き、python3 app_ja.pyで直接起動可能）
