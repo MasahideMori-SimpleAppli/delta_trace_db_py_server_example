@@ -185,17 +185,19 @@ formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s
 
 dt_logger = logging.getLogger("delta_trace_db")  # DeltaTraceDB パッケージの親ロガー
 dt_logger.setLevel(logging.DEBUG)
+dt_logger.propagate = False
 
 handler = ErrorLogHandler()
 handler.setFormatter(formatter)
-dt_logger.addHandler(handler)
+if not any(isinstance(h, ErrorLogHandler) for h in dt_logger.handlers):
+    dt_logger.addHandler(handler)
 
 # ---------------------------
 # サーバー起動（SSL付き、python3 app_ja.pyで直接起動可能）
 # ---------------------------
 if __name__ == "__main__":
     uvicorn.run(
-        "app_ja:app",  # "ファイル名:FastAPIインスタンス名"
+        app,
         host="127.0.0.1",
         port=8000,
         reload=False,  # TODO 本番環境ではリロードしてはならないのでFalseにします。Trueだと多重起動する可能性があります。

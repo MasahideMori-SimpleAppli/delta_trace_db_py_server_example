@@ -26,9 +26,9 @@ async def lifespan_context(fastapi_app: FastAPI):
     # Startup processing
     # Enter this here if you want to perform DB restore(from_dict) processing.
     if not scheduler.running:
-        scheduler.add_job(_backup_db, 'cron', hour=1, minute=0, id="daily_backup")
+        # scheduler.add_job(_backup_db, 'cron', hour=1, minute=0, id="daily_backup")
         # TODO During testing, enabling this allows saving every 10 seconds.
-        # scheduler.add_job(_backup_db, 'interval', seconds=10, id="test_backup", replace_existing=True)
+        scheduler.add_job(_backup_db, 'interval', seconds=10, id="test_backup", replace_existing=True)
         scheduler.start()
     yield
     # Shutdown processing
@@ -188,17 +188,19 @@ formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s
 
 dt_logger = logging.getLogger("delta_trace_db")  # DeltaTraceDB パッケージの親ロガー
 dt_logger.setLevel(logging.DEBUG)
+dt_logger.propagate = False
 
 handler = ErrorLogHandler()
 handler.setFormatter(formatter)
-dt_logger.addHandler(handler)
+if not any(isinstance(h, ErrorLogHandler) for h in dt_logger.handlers):
+    dt_logger.addHandler(handler)
 
 # ---------------------------
 # Server startup (with SSL, can run directly with python3 app.py)
 # ---------------------------
 if __name__ == "__main__":
     uvicorn.run(
-        "app:app",  # "filename:FastAPI instance name"
+        app,
         host="127.0.0.1",
         port=8000,
         reload=False,  # TODO In production, reload must be False. True may cause multiple instances.
