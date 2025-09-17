@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import uuid
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
+import logging
 
 # ---------------------------
 # スケジューラの作成
@@ -23,6 +24,7 @@ scheduler = BackgroundScheduler()
 @asynccontextmanager
 async def lifespan_context(fastapi_app: FastAPI):
     # Startup 処理
+    # DBの復元処理(from_dict)を行う場合はここに入れます。
     if not scheduler.running:
         scheduler.add_job(_backup_db, 'cron', hour=1, minute=0, id="daily_backup")
         # TODO テスト時はこちらを有効にすると10秒毎の保存ができます。
@@ -67,15 +69,13 @@ async def backend_db(request: Request):
     # TODO 操作中のユーザーの権限に応じて、実行できるクエリは制限してください。
     # TODO 許可するもののみを書く方式で、collection_permissions=None（デフォルト）はフロントエンド専用で全て許可となるので注意してください。
     # TODO キーはコレクション名です。パーミッションを指定しているコレクションへのアクセスのみが許可され、それ以外は拒否されます。
-    # TODO 例えば以下のパーミッションでは、usersへはaddやgetAllでアクセスできますが、clear等は使えず、users2などのコレクションにもアクセスできません。
-    collection_permissions = {"users": Permission([EnumQueryType.add, EnumQueryType.getAll])}
+    # TODO 例えば以下のパーミッションでは、usersへはadd,getAll, searchでアクセスできますが、clear等は使えず、users2などのコレクションにもアクセスできません。
+    collection_permissions = {"users": Permission([EnumQueryType.add, EnumQueryType.getAll, EnumQueryType.search])}
     result = delta_trace_db.execute_query_object(query=query, collection_permissions=collection_permissions)
-    # TODO テスト用。内容確認のためだけにprintしています。本番は削除してください。
-    print(str(delta_trace_db.to_dict()))
     # 成功した場合のみ、クエリをログとして保存します。
     if result.is_success:
         # TODO 暗号化などが必要な場合はsave_json_file関数内を調整してください。
-        _save_log(query=query_json)
+        _save_success_query(query=query_json)
     else:
         # 禁止された呼び出しを行うなどした場合など、
         # 失敗ケースはそのままresultを200 OKで返してもいい(フロントエンドでチェックする場合、isSuccessがfalseになる)ですが、
@@ -106,14 +106,17 @@ async def backend_db(request: Request):
 # ---------------------------
 # 自動バックアップやログ保存など
 # ---------------------------
-def _save_log(query):
-    # クエリログ（無制限に保存。OSの種類やログの頻度によっては制限を加えてください）
-    return save_json_file(query, folder="logs", prefix="log", max_files=None, exp=".q")
+def _save_log(log:str):
+    # クエリ以外のエラーログなど（OSの種類やログの頻度によっては制限を調整してください）
+    return save_json_file({"log" : log}, folder="logs", prefix="log", max_files=100000, exp=".log")
 
+def _save_success_query(query):
+    # クエリログ（無制限に保存。OSの種類やログの頻度によっては制限を加えてください）
+    return save_json_file(query, folder="success_query", prefix="q", max_files=None, exp=".q")
 
 def _save_error_query(query):
     # エラーになったクエリログ（無制限に保存。OSの種類やログの頻度によっては制限を加えてください）
-    return save_json_file(query, folder="e_query", prefix="log", max_files=None, exp=".q")
+    return save_json_file(query, folder="error_query", prefix="q", max_files=None, exp=".q")
 
 
 def _backup_db():
@@ -161,12 +164,38 @@ def save_json_file(data: dict, folder: str, prefix: str = "log", max_files: int 
     return filepath
 
 
+class ErrorLogHandler(logging.Handler):
+    """
+    DeltaTraceDB のエラーログを 発生ごとに処理して保存する Handler。
+    """
+    def __init__(self):
+        super().__init__()
+
+    def emit(self, record):
+        try:
+            log_entry = self.format(record)
+            _save_log(log_entry)
+        except Exception:
+            self.handleError(record)
+
+# ---------------------------
+# Handler を DeltaTraceDB の logger にアタッチ
+# ---------------------------
+formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+dt_logger = logging.getLogger("delta_trace_db")  # DeltaTraceDB パッケージの親ロガー
+dt_logger.setLevel(logging.DEBUG)
+
+handler = ErrorLogHandler()
+handler.setFormatter(formatter)
+dt_logger.addHandler(handler)
+
 # ---------------------------
 # サーバー起動（SSL付き、python3 app_ja.pyで直接起動可能）
 # ---------------------------
 if __name__ == "__main__":
     uvicorn.run(
-        "app:app",  # "ファイル名:FastAPIインスタンス名"
+        "app_ja:app",  # "ファイル名:FastAPIインスタンス名"
         host="127.0.0.1",
         port=8000,
         reload=False,  # TODO 本番環境ではリロードしてはならないのでFalseにします。Trueだと多重起動する可能性があります。

@@ -212,4 +212,6 @@ __marimo__/
 *.key
 logs/
 backups/
+success_query/
+error_query/
 e_query/
