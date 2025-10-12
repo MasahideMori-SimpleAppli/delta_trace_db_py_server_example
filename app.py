@@ -107,7 +107,7 @@ async def backend_db(request: Request):
 # Auto backup, log saving, etc.
 # ---------------------------
 def _save_log(log:str):
-    # クエリ以外のエラーログなど（OSの種類やログの頻度によっては制限を調整してください）
+    # Error logs other than queries (adjust the limit depending on the OS type and log frequency)
     return save_json_file({"log" : log}, folder="logs", prefix="log", max_files=100000, exp=".log")
 
 
@@ -186,7 +186,7 @@ class ErrorLogHandler(logging.Handler):
 # ---------------------------
 formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
-dt_logger = logging.getLogger("delta_trace_db")  # DeltaTraceDB パッケージの親ロガー
+dt_logger = logging.getLogger("delta_trace_db")  # Parent logger for the DeltaTraceDB package
 dt_logger.setLevel(logging.DEBUG)
 dt_logger.propagate = False
 
