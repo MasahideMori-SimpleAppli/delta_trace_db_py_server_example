@@ -1,9 +1,4 @@
-from delta_trace_db.db.delta_trace_db_core import DeltaTraceDatabase
-from delta_trace_db.query.cause.permission import Permission
-from delta_trace_db.query.enum_query_type import EnumQueryType
-from delta_trace_db.query.query import Query
-from delta_trace_db.query.transaction_query import TransactionQuery
-from delta_trace_db.query.util_query import UtilQuery
+from delta_trace_db import DeltaTraceDatabase, Permission, EnumQueryType, Query, TransactionQuery, UtilQuery
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -69,7 +64,8 @@ async def backend_db(request: Request):
     # TODO 操作中のユーザーの権限に応じて、実行できるクエリは制限してください。
     # TODO 許可するもののみを書く方式で、collection_permissions=None（デフォルト）はフロントエンド専用で全て許可となるので注意してください。
     # TODO キーはコレクション名です。パーミッションを指定しているコレクションへのアクセスのみが許可され、それ以外は拒否されます。
-    # TODO 例えば以下のパーミッションでは、usersへはadd,getAll, searchでアクセスできますが、clear等は使えず、users2などのコレクションにもアクセスできません。
+    # TODO 例えば以下のパーミッションでは、usersへはadd,getAll, searchでアクセスできますが、
+    #  clear等は使えず、users2などのコレクションにもアクセスできません。
     collection_permissions = {"users": Permission([EnumQueryType.add, EnumQueryType.getAll, EnumQueryType.search])}
     result = delta_trace_db.execute_query_object(query=query, collection_permissions=collection_permissions)
     # 成功した場合のみ、クエリをログとして保存します。
@@ -106,13 +102,15 @@ async def backend_db(request: Request):
 # ---------------------------
 # 自動バックアップやログ保存など
 # ---------------------------
-def _save_log(log:str):
+def _save_log(log: str):
     # クエリ以外のエラーログなど（OSの種類やログの頻度によっては制限を調整してください）
-    return save_json_file({"log" : log}, folder="logs", prefix="log", max_files=100000, exp=".log")
+    return save_json_file({"log": log}, folder="logs", prefix="log", max_files=100000, exp=".log")
+
 
 def _save_success_query(query):
     # クエリログ（無制限に保存。OSの種類やログの頻度によっては制限を加えてください）
     return save_json_file(query, folder="success_query", prefix="q", max_files=None, exp=".q")
+
 
 def _save_error_query(query):
     # エラーになったクエリログ（無制限に保存。OSの種類やログの頻度によっては制限を加えてください）
@@ -168,6 +166,7 @@ class ErrorLogHandler(logging.Handler):
     """
     DeltaTraceDB のエラーログを 発生ごとに処理して保存する Handler。
     """
+
     def __init__(self):
         super().__init__()
 
@@ -177,6 +176,7 @@ class ErrorLogHandler(logging.Handler):
             _save_log(log_entry)
         except Exception:
             self.handleError(record)
+
 
 # ---------------------------
 # Handler を DeltaTraceDB の logger にアタッチ

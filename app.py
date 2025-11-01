@@ -1,9 +1,4 @@
-from delta_trace_db.db.delta_trace_db_core import DeltaTraceDatabase
-from delta_trace_db.query.cause.permission import Permission
-from delta_trace_db.query.enum_query_type import EnumQueryType
-from delta_trace_db.query.query import Query
-from delta_trace_db.query.transaction_query import TransactionQuery
-from delta_trace_db.query.util_query import UtilQuery
+from delta_trace_db import DeltaTraceDatabase, Permission, EnumQueryType, Query, TransactionQuery, UtilQuery
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -69,7 +64,8 @@ async def backend_db(request: Request):
     # TODO Restrict executable queries according to the permissions of the operating user.
     # TODO Note that if you only write allowed ones, collection_permissions=None (default) allows all for frontend only.
     # TODO The key is the collection name. Only access to collections with specified permissions is allowed; others are denied.
-    # TODO For example, with the following permissions, access to "users" with add, getAll or search is allowed, but clear cannot be used, and access to collections like "users2" is denied.
+    # TODO For example, with the following permissions, access to "users" with add, getAll or search is allowed,
+    #  but clear cannot be used, and access to collections like "users2" is denied.
     collection_permissions = {"users": Permission([EnumQueryType.add, EnumQueryType.getAll, EnumQueryType.search])}
     result = delta_trace_db.execute_query_object(query=query, collection_permissions=collection_permissions)
     # Only if successful, save the query as a log.
