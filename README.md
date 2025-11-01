@@ -8,7 +8,8 @@ This is a sample server implementation using the Python version of DeltaTraceDB.
 ## Usage
 
 ### Installing dependencies
-pip install -r requirements.txt
+pip install -U -r requirements.txt
+(with upgrade flag)
 
 ### Run code
 python3 app.py

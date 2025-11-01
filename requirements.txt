@@ -1,4 +1,4 @@
-fastapi==0.116.2
-uvicorn[standard]==0.35.0
+fastapi==0.120.4
+uvicorn[standard]==0.38.0
 apscheduler
 delta-trace-db==0.0.35.post2
