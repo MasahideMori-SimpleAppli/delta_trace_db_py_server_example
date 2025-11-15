@@ -139,7 +139,8 @@ def save_json_file(data: dict, folder: str, prefix: str = "log", max_files: int 
     os.makedirs(folder, exist_ok=True)
     # TODO 必要に応じてタイムゾーンは変更してください。
     now = datetime.now(timezone.utc)
-    timestamp = now.strftime("%Y%m%dT%H%M%S%f")[:-3]
+    # TODO この部分はアプリケーションの要件次第です。場合により単調増加カウンタの追加なども検討してください。
+    timestamp = now.strftime("%Y%m%dT%H%M%S%f")
     unique_id = uuid.uuid4().hex[:8]
     filename = f"{prefix}_{timestamp}_{unique_id}" + exp
     filepath = os.path.join(folder, filename)
