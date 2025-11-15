@@ -12,26 +12,12 @@ pip install -U -r requirements.txt
 (with upgrade flag)
 
 ### Run code
-python3 app.py
-(Depending on your OS, "python app.py")
+python app.py
 
 ## Support
 
 There is essentially no support at this time, but bugs will likely be fixed.  
 If you find any issues, please open an issue on GitHub.
-
-## About version control
-
-The C part will be changed at the time of version upgrade.  
-However, versions less than 1.0.0 may change the file structure regardless of the following rules.
-
-- Changes such as adding variables, structure change that cause problems when reading previous
-  files.
-    - C.X.X
-- Adding methods, etc.
-    - X.C.X
-- Minor changes and bug fixes.
-    - X.X.C
 
 ## License
 
