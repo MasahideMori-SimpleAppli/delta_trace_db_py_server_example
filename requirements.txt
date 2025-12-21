@@ -1,4 +1,4 @@
 fastapi==0.125.0
 uvicorn[standard]==0.38.0
 apscheduler
-delta-trace-db==0.1.0
+delta-trace-db==0.1.1
